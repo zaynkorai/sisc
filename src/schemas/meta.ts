@@ -48,9 +48,9 @@ export type MutatorProposal = z.infer<typeof MutatorProposal>;
 export const AgentPermissions = z.object({
     can_modify_fields: z.array(z.string()).describe("State object paths this agent can modify"),
     cannot_modify_fields: z.array(z.string()).describe("State object paths explicitly denied"),
-    can_abort_episode: z.boolean().describe("Whether this agent can terminate the episode early."),
-    can_propose_resolution: z.boolean().describe("Whether this agent can propose a final agreement."),
-    max_state_mutations_per_turn: z.number().int().describe("Max number of state fields this agent can change per turn."),
+    can_abort_episode: z.boolean().default(false).describe("Whether this agent can terminate the episode early."),
+    can_propose_resolution: z.boolean().default(false).describe("Whether this agent can propose a final agreement."),
+    max_state_mutations_per_turn: z.number().int().default(1).describe("Max number of state fields this agent can change per turn."),
 });
 export type AgentPermissions = z.infer<typeof AgentPermissions>;
 

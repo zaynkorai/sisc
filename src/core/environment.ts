@@ -24,6 +24,7 @@ import {
     EpisodeCorruptedError,
     PermissionViolationError,
     MaxAgentsExceededError,
+    CostLimitExceededError,
 } from "../errors/index.js";
 
 /** Supported events emitted by the EnvironmentManager. */
@@ -33,6 +34,7 @@ export interface EnvironmentEvents {
     "turn:penalty": [{ speakerId: string; retries: number }];
     "episode:complete": [{ finalState: GenericStateObject; reason: string }];
     "agent:created": [{ spec: NewAgentProvisioningType }];
+    "context:summarized": [{ prunedCount: number }];
 }
 
 export class EnvironmentManager extends EventEmitter {
@@ -173,6 +175,18 @@ export class EnvironmentManager extends EventEmitter {
 
         // 5. Validate permissions (created agents have restricted field access)
         // Enforced by docs/self_creation_mechanics.md §2 — Permissions Binding
+        const permissions = this.agentPermissions[speakerId];
+        if (permissions) {
+            if (proposal.state_mutations.length > permissions.max_state_mutations_per_turn) {
+                throw new PermissionViolationError(speakerId, "state_mutations");
+            }
+            if (proposal.abort_episode && !permissions.can_abort_episode) {
+                throw new PermissionViolationError(speakerId, "abort_episode");
+            }
+            if (proposal.propose_resolution && !permissions.can_propose_resolution) {
+                throw new PermissionViolationError(speakerId, "propose_resolution");
+            }
+        }
         for (const mutation of proposal.state_mutations) {
             if (!this.isPermitted(speakerId, mutation.path)) {
                 throw new PermissionViolationError(speakerId, mutation.path);
@@ -220,11 +234,13 @@ export class EnvironmentManager extends EventEmitter {
             this.state.turn_number % this.config.info_disruptor_frequency === 0
         ) {
             const report = await this.infoDisruptor.observe(this.actionLogs, this.state);
-            this.actionLogs.push({
-                turn: this.state.turn_number,
-                speakerId: "disruptor_info",
-                ...report,
-            });
+            if (report.inject_into_transcript) {
+                this.actionLogs.push({
+                    turn: this.state.turn_number,
+                    speakerId: "disruptor_info",
+                    ...report,
+                });
+            }
         }
 
         this.state.turn_number++;
@@ -254,19 +270,22 @@ export class EnvironmentManager extends EventEmitter {
             !this.state.is_terminal &&
             this.state.turn_number < this.config.max_turns_per_episode
         ) {
-            // Cost circuit breaker
-            // Enforced by docs/safety_and_sandboxing.md §3 — Hard Token Limits
-            if (tokenUsage > this.config.max_episode_tokens) {
-                this.state.is_terminal = true;
-                this.terminationReason = "token_limit";
-                break;
-            }
-
             try {
                 tokenUsage += await this.step(agents);
+                // Cost circuit breaker
+                // Enforced by docs/safety_and_sandboxing.md §3 — Hard Token Limits
+                if (tokenUsage > this.config.max_episode_tokens) {
+                    throw new CostLimitExceededError(tokenUsage, this.config.max_episode_tokens);
+                }
             } catch (err) {
                 if (err instanceof EpisodeCorruptedError) {
                     this.terminationReason = "corrupted";
+                    this.state.is_terminal = true;
+                    break;
+                }
+                if (err instanceof CostLimitExceededError) {
+                    this.terminationReason = "token_limit";
+                    this.state.is_terminal = true;
                     break;
                 }
                 throw err;
@@ -278,9 +297,9 @@ export class EnvironmentManager extends EventEmitter {
                 // Prune old action logs (keep only the last 2N turns to prevent context window explosion)
                 const keepCount = this.config.summarization_frequency * 2;
                 if (this.actionLogs.length > keepCount) {
+                    const prunedCount = this.actionLogs.length - keepCount;
                     this.actionLogs = this.actionLogs.slice(-keepCount);
-                    // Emit an event so external loggers know the internal token context was pruned
-                    this.emit("turn:penalty", { speakerId: "system_summarizer", retries: 0 }); // reuse or make new event
+                    this.emit("context:summarized", { prunedCount });
                 }
             }
         }

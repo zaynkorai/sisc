@@ -8,6 +8,7 @@
  */
 import Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
+import fs from "node:fs";
 
 /** Schema migration definition. */
 export interface Migration {
@@ -117,8 +118,10 @@ const MIGRATIONS: Migration[] = [
 
 export class SqliteDatabase {
     private db: Database.Database;
+    private dbPath: string;
 
     constructor(dbPath: string = ":memory:") {
+        this.dbPath = dbPath;
         this.db = new Database(dbPath);
         this.db.pragma("journal_mode = WAL");
         this.db.pragma("foreign_keys = ON");
@@ -144,6 +147,14 @@ export class SqliteDatabase {
             .prepare("SELECT MAX(version) as v FROM SchemaVersions")
             .get() as { v: number | null };
         const version = currentVersion?.v ?? 0;
+        const hasPendingMigrations = MIGRATIONS.some(migration => migration.version > version);
+
+        // Enforced by docs/data_and_memory_schemas.md §3 — Backup before migrate
+        if (hasPendingMigrations && this.dbPath !== ":memory:") {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const backupPath = `${this.dbPath}.backup.${timestamp}.sqlite`;
+            fs.copyFileSync(this.dbPath, backupPath);
+        }
 
         for (const migration of MIGRATIONS) {
             if (migration.version > version) {
@@ -310,18 +321,54 @@ export class SqliteDatabase {
      * @see docs/data_and_memory_schemas.md §5 — Retention and Pruning Policy
      */
     pruneOldData(): void {
-        // Archive episodes older than 20 generations
-        const cutoffGen = this.db
-            .prepare("SELECT id FROM Generations ORDER BY created_at DESC LIMIT 1 OFFSET 20")
-            .get() as { id: string } | undefined;
+        const latest20 = this.db
+            .prepare("SELECT id FROM Generations ORDER BY created_at DESC LIMIT 20")
+            .all() as Array<{ id: string }>;
+        const latest5 = this.db
+            .prepare("SELECT id FROM Generations ORDER BY created_at DESC LIMIT 5")
+            .all() as Array<{ id: string }>;
 
-        if (cutoffGen) {
-            this.db.exec(
-                `INSERT INTO episodes_archive SELECT * FROM Episodes WHERE generation_id < '${cutoffGen.id}'`,
-            );
-            this.db.exec(
-                `DELETE FROM Episodes WHERE generation_id < '${cutoffGen.id}'`,
-            );
+        const keepEpisodesIds = latest20.map(g => g.id);
+        const keepActionLogGenerationIds = latest5.map(g => g.id);
+
+        if (keepEpisodesIds.length > 0) {
+            const episodePlaceholders = keepEpisodesIds.map(() => "?").join(", ");
+            const staleEpisodes = this.db
+                .prepare(
+                    `SELECT id FROM Episodes WHERE generation_id NOT IN (${episodePlaceholders})`,
+                )
+                .all(...keepEpisodesIds) as Array<{ id: string }>;
+
+            if (staleEpisodes.length > 0) {
+                const staleEpisodeIds = staleEpisodes.map(ep => ep.id);
+                const stalePlaceholders = staleEpisodeIds.map(() => "?").join(", ");
+
+                this.db
+                    .prepare(
+                        `INSERT INTO episodes_archive SELECT * FROM Episodes WHERE id IN (${stalePlaceholders})`,
+                    )
+                    .run(...staleEpisodeIds);
+                this.db
+                    .prepare(`DELETE FROM ActionLogs WHERE episode_id IN (${stalePlaceholders})`)
+                    .run(...staleEpisodeIds);
+                this.db
+                    .prepare(`DELETE FROM Episodes WHERE id IN (${stalePlaceholders})`)
+                    .run(...staleEpisodeIds);
+            }
+        }
+
+        if (keepActionLogGenerationIds.length > 0) {
+            const genPlaceholders = keepActionLogGenerationIds.map(() => "?").join(", ");
+            this.db
+                .prepare(
+                    `DELETE FROM ActionLogs
+                     WHERE episode_id IN (
+                       SELECT id FROM Episodes
+                       WHERE generation_id NOT IN (${genPlaceholders})
+                         AND agent_a_score > -3
+                     )`,
+                )
+                .run(...keepActionLogGenerationIds);
         }
     }
 

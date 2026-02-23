@@ -14,8 +14,8 @@ export const ActionProposal = z.object({
     internal_monologue: z.string().describe("Your hidden reasoning (Chain of Thought)."),
     public_dialogue: z.string().describe("What you explicitly say to the other agent."),
     state_mutations: z.array(StateMutation).describe("Proposed changes to the state."),
-    propose_resolution: z.boolean().describe("True if you believe a final agreement has been reached."),
-    abort_episode: z.boolean().describe("True if you wish to terminate the negotiation immediately."),
+    propose_resolution: z.boolean().default(false).describe("True if you believe a final agreement has been reached."),
+    abort_episode: z.boolean().default(false).describe("True if you wish to terminate the negotiation immediately."),
 });
 export type ActionProposal = z.infer<typeof ActionProposal>;
 

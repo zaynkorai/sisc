@@ -33,6 +33,9 @@ program
     .command("simulate")
     .description("Run a no-code simulation from a scenario file")
     .option("-s, --scenario <path>", "Path to the scenario JSON file")
+    .option("--provider <provider>", "LLM provider override (openai|google|anthropic)")
+    .option("--model <model>", "LLM model override")
+    .option("--max-generations <number>", "Override max generations for this run")
     .action(simulateCommand);
 
 program.parse(process.argv);

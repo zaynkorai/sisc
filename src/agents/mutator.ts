@@ -19,6 +19,7 @@ import type { ActorAgent } from "./actor.js";
 import type { GenericStateObject } from "../schemas/state.js";
 import type { FrameworkConfig } from "../schemas/config.js";
 import { MutatorProposal } from "../schemas/meta.js";
+import { mean, lowerConfidenceBound, mannWhitneyUTest } from "../core/statistics.js";
 
 /** Result of a completed episode: [finalState, scoresMap, terminationReason?] */
 export type EpochResult = [GenericStateObject, Record<string, number>, string?];
@@ -91,22 +92,30 @@ export class Mutator {
         // --- Phase B: Shadow Trials (The Arena) ---
         // Enforced by docs/self_improvement_loop.md §3B — Phase B: Shadow Trials
         let bestVariant: ActorAgent | null = null;
-        let bestScore = -Infinity;
-        const baselineScore = this.calculateMean(epochResults.map((r) => r[1][agent.id] ?? 0));
+        let bestLCB = -Infinity;
+        let bestShadowScores: number[] = [];
+        const baselineScores = epochResults.map((r) => r[1][agent.id] ?? 0);
+        const baselineScore = mean(baselineScores);
 
         for (const variant of variants) {
             const shadowScores = await runShadowTrial(variant);
-            const variantMean = this.calculateMean(shadowScores);
-            if (variantMean > bestScore) {
-                bestScore = variantMean;
+            const variantLCB = lowerConfidenceBound(shadowScores, config.acceptance_lcb_lambda);
+            if (variantLCB > bestLCB) {
+                bestLCB = variantLCB;
                 bestVariant = variant;
+                bestShadowScores = shadowScores;
             }
         }
 
         // --- Phase C: Commitment or Archival ---
         // Enforced by docs/evaluation_and_math.md §2 — Acceptance Criteria (LCB)
         const delta = config.improvement_margin;
-        if (bestVariant && bestScore > baselineScore + delta) {
+        const pValue = mannWhitneyUTest(bestShadowScores, baselineScores).pValue;
+        if (
+            bestVariant &&
+            bestLCB > baselineScore + delta &&
+            pValue < config.acceptance_p_value_threshold
+        ) {
             // Acceptance: statistically significant improvement
             this.plateauCounter = 0;
             return bestVariant;
@@ -126,9 +135,4 @@ export class Mutator {
         return this.plateauCounter >= patience;
     }
 
-    /** Calculate mean of a number array. */
-    private calculateMean(values: number[]): number {
-        if (values.length === 0) return 0;
-        return values.reduce((sum, v) => sum + v, 0) / values.length;
-    }
 }

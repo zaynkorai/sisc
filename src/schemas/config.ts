@@ -27,6 +27,10 @@ export const FrameworkConfig = z.object({
     shadow_trial_count: z.number().int().default(10),
     /** Delta required for a mutation to be accepted over baseline. */
     improvement_margin: z.number().default(0.5),
+    /** LCB variance penalty scale (lambda) for shadow-trial acceptance. */
+    acceptance_lcb_lambda: z.number().positive().default(1),
+    /** Statistical significance threshold for Mann-Whitney U acceptance. */
+    acceptance_p_value_threshold: z.number().gt(0).lte(1).default(0.05),
 
     // --- Creation Settings ---
     /** K generations of plateau before triggering the Provisioner. */
@@ -37,6 +41,8 @@ export const FrameworkConfig = z.object({
     creation_cooldown_generations: z.number().int().default(3),
     /** Whether to pause for human approval before deploying a created agent. */
     require_human_approval_for_creation: z.boolean().default(true),
+    /** Maximum generations to run in the high-level orchestrator loop. */
+    max_generations: z.number().int().positive().default(100),
 
     // --- Error Handling ---
     /** Max Zod validation retries before forced concession. */

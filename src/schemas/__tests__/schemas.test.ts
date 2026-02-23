@@ -82,6 +82,16 @@ describe("ActionProposal", () => {
             }),
         ).toThrow();
     });
+
+    it("applies defaults for resolution/abort booleans", () => {
+        const result = ActionProposal.parse({
+            internal_monologue: "Thinking",
+            public_dialogue: "Speaking",
+            state_mutations: [],
+        });
+        expect(result.propose_resolution).toBe(false);
+        expect(result.abort_episode).toBe(false);
+    });
 });
 
 describe("DisruptorReport", () => {
@@ -195,6 +205,18 @@ describe("NewAgentProvisioning", () => {
     });
 });
 
+describe("AgentPermissions", () => {
+    it("applies documented defaults", () => {
+        const result = AgentPermissions.parse({
+            can_modify_fields: ["x"],
+            cannot_modify_fields: ["y"],
+        });
+        expect(result.can_abort_episode).toBe(false);
+        expect(result.can_propose_resolution).toBe(false);
+        expect(result.max_state_mutations_per_turn).toBe(1);
+    });
+});
+
 describe("Ingredient", () => {
     it("parses valid ingredient", () => {
         const result = Ingredient.parse({
@@ -233,6 +255,9 @@ describe("FrameworkConfig", () => {
         expect(result.creation_patience).toBe(5);
         expect(result.max_validation_retries).toBe(3);
         expect(result.scout_sweep_interval_generations).toBe(5);
+        expect(result.acceptance_lcb_lambda).toBe(1);
+        expect(result.acceptance_p_value_threshold).toBe(0.05);
+        expect(result.max_generations).toBe(100);
     });
 
     it("allows overrides", () => {

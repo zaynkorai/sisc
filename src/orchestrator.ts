@@ -23,6 +23,7 @@ import type { GenericStateObject } from "./schemas/state.js";
 import type { FrameworkConfig } from "./schemas/config.js";
 import type { LLMClient } from "./llm/client.js";
 import type { EpochResult } from "./agents/mutator.js";
+import { mean, lowerConfidenceBound, mannWhitneyUTest } from "./core/statistics.js";
 
 export interface OrchestratorOptions {
     config: FrameworkConfig;
@@ -68,7 +69,7 @@ export async function runFullSimulation(options: OrchestratorOptions): Promise<v
         capitalizer,
         tensionDisruptor,
         infoDisruptor,
-        maxGenerations = 100,
+        maxGenerations = config.max_generations,
         onCreationApproval,
         onGenerationComplete,
         onTurnComplete,
@@ -187,13 +188,13 @@ export async function runFullSimulation(options: OrchestratorOptions): Promise<v
             }
 
             // Phase 3b: The Shadow Test
-            // We use the mean score across ALL primary agents as the baseline
-            const calculateCombinedMean = (results: EpochResult[]) => {
-                const allScores = results.flatMap(r => Object.values(r[1]));
-                return allScores.reduce((s, val) => s + val, 0) / allScores.length;
-            };
-
-            const baseAvg = calculateCombinedMean(epochResults);
+            const baselinePrimaryScores = epochResults.map((result) => {
+                const primaryScores = Object.entries(result[1])
+                    .filter(([id]) => agents[id])
+                    .map(([_, score]) => score);
+                return mean(primaryScores);
+            });
+            const baseAvg = mean(baselinePrimaryScores);
             const shadowEnv = new EnvironmentManager(structuredClone(initialState), config);
 
             shadowEnv.turnOrder = Object.keys(activeAgents);
@@ -215,9 +216,13 @@ export async function runFullSimulation(options: OrchestratorOptions): Promise<v
             );
 
             const shadowScores = await Promise.all(shadowTrialPromises);
-            const shadowAvg = shadowScores.reduce((s, score) => s + score, 0) / shadowScores.length;
+            const shadowLcb = lowerConfidenceBound(shadowScores, config.acceptance_lcb_lambda);
+            const pValue = mannWhitneyUTest(shadowScores, baselinePrimaryScores).pValue;
 
-            if (shadowAvg > baseAvg + config.improvement_margin) {
+            if (
+                shadowLcb > baseAvg + config.improvement_margin &&
+                pValue < config.acceptance_p_value_threshold
+            ) {
 
                 const env = new EnvironmentManager(structuredClone(initialState), config);
                 env.turnOrder = Object.keys(activeAgents);

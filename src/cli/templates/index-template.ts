@@ -48,7 +48,7 @@ async function main() {
         mutator,
         provisioner,
         llmClient,
-        maxGenerations: 10,
+        maxGenerations: config.max_generations,
         onGenerationComplete: (generation, results) => {
             console.log(\`Generation \${generation} complete. Results: \${results.length}\`);
         }

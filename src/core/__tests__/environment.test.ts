@@ -267,4 +267,91 @@ describe("Permission Enforcement", () => {
             }),
         ).rejects.toThrow(PermissionViolationError);
     });
+
+    it("rejects created-agent abort_episode when capability is disabled", async () => {
+        const config = makeConfig();
+        const state = makeState();
+        const env = new EnvironmentManager(state, config);
+        const mockLLM = {} as LLMClient;
+        env.turnOrder = ["agent_a"];
+        env.mountAgent(
+            {
+                agent_id: "broker_01",
+                archetype: "broker",
+                turn_injection_logic: "speak_every_1_turns",
+                system_prompt: "Broker",
+                core_goals: [],
+                permissions: {
+                    can_modify_fields: [],
+                    cannot_modify_fields: [],
+                    can_abort_episode: false,
+                    can_propose_resolution: false,
+                    max_state_mutations_per_turn: 1,
+                },
+                design_rationale: "Test",
+            },
+            mockLLM,
+        );
+
+        const broker = mockAgent("broker_01", {
+            internal_monologue: "Escalate",
+            public_dialogue: "Abort now",
+            state_mutations: [],
+            propose_resolution: false,
+            abort_episode: true,
+        });
+        env.state.turn_number = env.turnOrder.indexOf("broker_01");
+
+        await expect(
+            env.step({
+                agent_a: mockAgent("agent_a", {}),
+                broker_01: broker,
+            }),
+        ).rejects.toThrow(PermissionViolationError);
+    });
+
+    it("rejects created-agent proposals exceeding max_state_mutations_per_turn", async () => {
+        const config = makeConfig();
+        const state = makeState();
+        const env = new EnvironmentManager(state, config);
+        const mockLLM = {} as LLMClient;
+        env.turnOrder = ["agent_a"];
+        env.mountAgent(
+            {
+                agent_id: "broker_01",
+                archetype: "broker",
+                turn_injection_logic: "speak_every_1_turns",
+                system_prompt: "Broker",
+                core_goals: [],
+                permissions: {
+                    can_modify_fields: ["x"],
+                    cannot_modify_fields: [],
+                    can_abort_episode: false,
+                    can_propose_resolution: false,
+                    max_state_mutations_per_turn: 1,
+                },
+                design_rationale: "Test",
+            },
+            mockLLM,
+        );
+
+        const broker = mockAgent("broker_01", {
+            internal_monologue: "Two changes",
+            public_dialogue: "Mutate a lot",
+            state_mutations: [
+                { action: "modify", path: "x.a", value: 1 },
+                { action: "modify", path: "x.b", value: 2 },
+            ],
+            propose_resolution: false,
+            abort_episode: false,
+        });
+        env.state.turn_number = env.turnOrder.indexOf("broker_01");
+
+        await expect(
+            env.step({
+                agent_a: mockAgent("agent_a", {}),
+                broker_01: broker,
+            }),
+        ).rejects.toThrow(PermissionViolationError);
+    });
 });

@@ -12,6 +12,7 @@ import {
     resolveLanguageModel,
     FrameworkConfig,
 } from "../../index.js";
+import { z } from "zod/v4";
 
 interface ScenarioActor {
     id: string;
@@ -21,21 +22,34 @@ interface ScenarioActor {
     immutableCore: string;
 }
 
-interface Scenario {
-    name: string;
-    description: string;
-    context: string;
-    initialState: {
-        variables: Record<string, any>;
-    };
-    actors: ScenarioActor[];
-    config: {
-        epoch_size: number;
-        max_turns_per_episode: number;
-        max_generations: number;
-        improvement_margin: number;
-    };
-}
+const ScenarioSchema = z.object({
+    name: z.string().min(1),
+    description: z.string().min(1),
+    context: z.string().min(1),
+    initialState: z.object({
+        variables: z.record(z.string(), z.any()),
+    }),
+    actors: z.array(z.object({
+        id: z.string().min(1),
+        name: z.string().min(1),
+        role: z.string().min(1),
+        personality: z.string().min(1),
+        immutableCore: z.string().min(1),
+    })).min(2),
+    config: FrameworkConfig.partial().default({}),
+    prompts: z.object({
+        judge_rubric: z.string(),
+        judge_system_prompt: z.string(),
+        mutator_system_prompt: z.string(),
+        provisioner_system_prompt: z.string(),
+    }).partial().default({}),
+    runtime: z.object({
+        provider: z.string(),
+        model: z.string(),
+    }).partial().default({}),
+});
+
+type Scenario = z.infer<typeof ScenarioSchema>;
 
 async function createInteractiveScenario(): Promise<Scenario | null> {
     const name = await p.text({
@@ -106,7 +120,9 @@ async function createInteractiveScenario(): Promise<Scenario | null> {
             max_turns_per_episode: 6,
             max_generations: 3,
             improvement_margin: 0.1
-        }
+        },
+        prompts: {},
+        runtime: {},
     };
 
     const save = await p.confirm({
@@ -129,7 +145,12 @@ async function createInteractiveScenario(): Promise<Scenario | null> {
     return scenario;
 }
 
-export async function simulateCommand(options: { scenario?: string }) {
+export async function simulateCommand(options: {
+    scenario?: string;
+    provider?: string;
+    model?: string;
+    maxGenerations?: string;
+}) {
     p.intro(chalk.bgCyan.black(" SISC - No-Code Simulation "));
 
     const scenariosDir = path.join(process.cwd(), "scenarios");
@@ -139,9 +160,10 @@ export async function simulateCommand(options: { scenario?: string }) {
         const scenarioPath = path.resolve(process.cwd(), options.scenario);
         try {
             const content = await fs.readFile(scenarioPath, "utf-8");
-            scenario = JSON.parse(content);
+            scenario = ScenarioSchema.parse(JSON.parse(content));
         } catch (err) {
             p.log.error(chalk.red(`Failed to load scenario from ${options.scenario}`));
+            p.log.error(err instanceof Error ? err.message : String(err));
             process.exit(1);
         }
     } else {
@@ -170,9 +192,10 @@ export async function simulateCommand(options: { scenario?: string }) {
         } else {
             try {
                 const content = await fs.readFile(selection as string, "utf-8");
-                scenario = JSON.parse(content);
+                scenario = ScenarioSchema.parse(JSON.parse(content));
             } catch (err) {
                 p.log.error(chalk.red("Failed to load selected scenario."));
+                p.log.error(err instanceof Error ? err.message : String(err));
                 process.exit(1);
             }
         }
@@ -193,8 +216,19 @@ export async function simulateCommand(options: { scenario?: string }) {
     p.log.step("Initializing framework components...");
 
     try {
-        const model = resolveLanguageModel();
+        const selectedProvider = options.provider ?? scenario.runtime.provider;
+        const selectedModel = options.model ?? scenario.runtime.model;
+        const model = resolveLanguageModel(selectedProvider, selectedModel);
         const llmClient = new LLMClient(model);
+
+        const frameworkConfig = FrameworkConfig.parse(scenario.config);
+        const maxGenerationsOverride = options.maxGenerations
+            ? Number(options.maxGenerations)
+            : undefined;
+        if (Number.isNaN(maxGenerationsOverride)) {
+            throw new Error(`Invalid --max-generations value: ${options.maxGenerations}`);
+        }
+        const maxGenerations = maxGenerationsOverride ?? frameworkConfig.max_generations;
 
         const activeAgents: Record<string, ActorAgent> = {};
         for (const actor of scenario.actors) {
@@ -206,17 +240,21 @@ export async function simulateCommand(options: { scenario?: string }) {
             });
         }
 
-        const judgeSystemPrompt = "You are an impartial, mathematically rigorous evaluator. You have no allegiance to any agent. You evaluate OUTCOMES, not intentions.";
+        const judgeSystemPrompt = scenario.prompts.judge_system_prompt ??
+            "You are an impartial, mathematically rigorous evaluator. You have no allegiance to any agent. You evaluate OUTCOMES, not intentions.";
         const judge = new Critic(
+            scenario.prompts.judge_rubric ??
             "Evaluate based on strategic depth, adherence to goals, and avoidance of unnecessary destructive escalation unless aligned with core interests.",
             judgeSystemPrompt,
             llmClient
         );
 
-        const mutatorSystemPrompt = "You are an expert AI Strategist and Prompt Engineer. Your objective is to review a failed simulation episode and generate exactly THREE new, distinct strategic tactics.";
+        const mutatorSystemPrompt = scenario.prompts.mutator_system_prompt ??
+            "You are an expert AI Strategist and Prompt Engineer. Your objective is to review a failed simulation episode and generate exactly THREE new, distinct strategic tactics.";
         const mutator = new Mutator(mutatorSystemPrompt, llmClient);
 
-        const provisionerSystemPrompt = "You are a Macro-Systems Architect. The primary negotiation environment is fundamentally deadlocked. Your objective is to design, provision, and deploy a brand new Agent.";
+        const provisionerSystemPrompt = scenario.prompts.provisioner_system_prompt ??
+            "You are a Macro-Systems Architect. The primary negotiation environment is fundamentally deadlocked. Your objective is to design, provision, and deploy a brand new Agent.";
         const provisioner = new Provisioner(provisionerSystemPrompt, llmClient);
 
         p.log.success("Environment ready.");
@@ -234,22 +272,14 @@ export async function simulateCommand(options: { scenario?: string }) {
         simSpinner.start("Simulation in progress...");
 
         await runFullSimulation({
-            config: FrameworkConfig.parse({
-                ...scenario.config,
-                max_active_created_agents: 3,
-                creation_patience: 1,
-                shadow_trial_count: 2,
-                summarization_frequency: 5,
-                info_disruptor_frequency: 3,
-                require_human_approval_for_creation: false,
-            }),
+            config: frameworkConfig,
             initialState: scenario.initialState as any,
             agents: activeAgents,
             judge,
             mutator,
             provisioner,
             llmClient,
-            maxGenerations: scenario.config.max_generations,
+            maxGenerations,
             onGenerationComplete: (gen, results) => {
                 const allScores = results.flatMap(r => Object.values(r[1]));
                 const avgTotal = allScores.reduce((sum, val) => sum + val, 0) / allScores.length;
