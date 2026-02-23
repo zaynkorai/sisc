@@ -37,10 +37,12 @@ When the `Mutator` generates a new Strategy Prompt (e.g., Strategy V2), it enter
 
 The framework uses an A/B testing methodology to determine if Strategy V2 is *mathematically superior* to the current production Strategy V1.
 
-### The A/B Testing Loop
-Let $N$ be the number of shadow trials (e.g., $N = 10$).
-1.  Run $N$ simulated episodes using Agent A (Strategy V1) vs Agent B. Calculate the average Judge score: $\mu_{baseline}$.
-2.  Run $N$ isolated episodes using Agent A (Strategy V2) vs Agent B. Calculate the average Judge score: $\mu_{mutated}$.
+### The Arena Execution Loop (Multi-Armed Bandit & Early Culling)
+Running flat A/B tests for all generated variations across large $N$ samples creates prohibitive compute costs ($O(V \times N \times T)$ token calls). Therefore, the framework utilizes **Successive Halving** and **Multi-Armed Bandit (UCB1)** allocation.
+
+1.  **Fast Pruning Phase ($n=3$ turns):** Run $V$ variant strategies for a fraction of the episode length. Apply a fast, heuristic evaluation. The worst-performing variations are immediately killed, saving API costs.
+2.  **Full Trial Allocation:** Only allocate the full $N$ shadow trials (e.g., $N=10$) to the top-performing survivors.
+3.  **Baseline vs Mutation:** Compare the full-trial average Judge score of the surviving mutation ($\mu_{mutated}$) against the recorded running average of the production baseline ($\mu_{baseline}$).
 
 ### The Acceptance Criteria (Lower Confidence Bound & Thresholds)
 The Mutator will **only** commit Strategy V2 to production if two conditions are met:
@@ -49,7 +51,7 @@ The Mutator will **only** commit Strategy V2 to production if two conditions are
     $$ (\mu_{mutated} - \lambda \cdot \sigma_{mutated}) > \mu_{baseline} + \delta $$
     (Where $\delta$ is a configurable margin of improvement, and $\lambda$ scales the variance penalty).
 
-2.  **Statistical Significance (MARL Standard)**: For enterprise deployments, the framework calculates an independent two-sample T-test or a non-parametric alternative (Mann-Whitney U test for $N < 30$). Strategy V2 is only accepted if the $p$-value $< 0.05$, verifying the improvement is due to fundamental strategy changes, not random environmental noise.
+2.  **Statistical Significance (Non-Parametric Standard)**: Because $N$ is typically small (e.g., $N=10$) to preserve compute, parametric T-tests are invalid. The framework calculates statistical significance using the **Mann-Whitney U test**. Strategy V2 is only accepted if the $p$-value $< 0.05$, verifying the improvement is due to fundamental strategy changes, not random environmental noise.
 
 ## 3. The Mathematics of Co-Evolution and the Red Queen
 

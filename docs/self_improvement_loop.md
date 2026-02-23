@@ -56,21 +56,22 @@ This algorithm operates in three distinct phases to explore new strategies and p
    * *Variant 2*: Conciliatory/Collaborative framing
    * *Variant 3*: Deceptive/Leverage-based strategy
 
-### Phase B: Shadow Trials (The Arena)
+### Phase B: Shadow Trials (The Arena / Successive Halving)
 
-The framework does *not* deploy these unproven mutations directly against production models.
+To prevent a massive compute explosion (e.g., running 90 multi-turn simulations to validate 3 variants), the Arena does *not* run a flat A/B test. Instead, it utilizes **Successive Halving** (a bandit-based early culling algorithm).
 
 1. **Isolation**: It spins up silent background routines—the "Shadow Simulations."
-2. **Execution**: The three mutated Agent A strategies are matched against a static, controlled baseline version of Agent B. Each variant runs a statistically significant number of iterations (e.g., 5-10 trials each) against the baseline. See `evaluation_and_math.md` for the precise acceptance criteria and statistical significance thresholds.
+2. **Early Culling (Turn 3)**: All three mutated strategies play exactly 3 turns. A "Heuristic Fast-Judge" evaluates the intermediate state. Any variant showing immediate conversational failure, infinite looping, or heavy concessions is aborted.
+3. **Execution**: Only the surviving, promising variants proceed to run the full batch of episodes (e.g., $N=10$) against the static, controlled baseline version of Agent B. See `evaluation_and_math.md` for the precise acceptance criteria.
 
 ### Phase C: Evaluation & Commitment (The Checkpoint)
 
 The final stage prevents strategic regression.
 
-1. **Evaluation**: The Judge strictly grades the outcomes of the three variant batches in the Arena against the success average of the current production strategy.
+1. **Evaluation**: The rigorous Judge Meta-Agent strictly grades the outcomes of the surviving variant batches in the Arena against the success average of the current production strategy.
 2. **Commitment Logic**:
    * **Success**: If a mutated variant yields a statistically significant increase in the final average evaluation score over the active baseline, it is committed to production as the new default `Strategy Prompt` and hyperparameter configuration for that Agent profile.
-   * **Failure**: If none of the variants surpass the active baseline, they are permanently archived into a "Failed Tactics" branch of Semantic Memory. The Mutator uses this context on its next generation cycle to avoid exploring identified dead evolutionary branches.
+   * **Failure**: If standard variants fail or are culled early, they are permanently archived into a "Failed Tactics" branch of Semantic Memory. The Mutator uses this context on its next generation cycle to avoid exploring identified dead evolutionary branches.
 
 ## 4. Addressing Common "Autonomy" Risks
 

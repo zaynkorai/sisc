@@ -85,6 +85,12 @@ These use cases map directly to the framework's architecture with minimal or no 
 *   **Judge**: Scientific merit score + funding efficiency + conflict-of-interest penalty
 *   **Self-Creation**: Ethics review board agents, external referee agents, interdisciplinary bridge agents
 
+### L. Automated Code Review (ACR)
+*   **Agents**: Author Agent (proposer), Reviewer Agent (quality guard)
+*   **State**: Code diffs/mutations, test coverage specs, linting results
+*   **Judge**: Quality index + technical debt penalty + velocity-decay score ($\gamma^t$)
+*   **Self-Creation**: Performance profiler agents, specialized security auditor agents, architectural tie-breakers
+
 ## 3. Good Fit With Adaptation ⚠️
 
 These use cases can work but require meaningful extensions to the core framework:
@@ -138,7 +144,15 @@ These use cases require a fundamentally different architecture:
 *   **Why not**: The framework operates on a discrete, turn-based execution loop. Agents take turns. Real-time systems (e.g., autonomous driving, live trading bots) require continuous-time decision-making with no concept of "turns."
 *   **What to use instead**: Reinforcement Learning environments (e.g., OpenAI Gym, PettingZoo for multi-agent RL).
 
-## 5. Decision Flowchart
+## 5. The Role of Memory and Mistake Tracking (Context & Evolution)
+
+A key differentiator that makes complex use cases (like Automated Code Review and Game Theory Research) viable in this framework is its approach to long-term memory and context window pressure.
+
+For a use case to succeed across multiple generations (Epochs), it must leverage the framework's memory architecture:
+*   **Where Mistakes Are Stored**: Failed strategies, negotiation dead-ends, and hallucinated logic are not discarded. They are embedded into the **Vector Database (ChromaDB)** or saved to the **Episodic SQLite DB** by the Judge and Mutator.
+*   **Context Window Pressure**: For extensively long simulations (e.g., thousands of turns), the framework relies heavily on summary distillation. Use cases that require *perfect verbatim recall* of turn 1 during turn 1000 without summation are a poor fit. The state must be compressible.
+
+## 6. Decision Flowchart
 
 To determine if your use case fits, answer these questions:
 

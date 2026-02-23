@@ -48,7 +48,8 @@ A single "Tick" of the environment follows a strict sequence to ensure determini
 5. **State Update**: The Environment appends the dialogue to the transcript and patches the global `State Object` based on the Actor's proposed modifications.
 6. **Disruptor Check (Tension)**: The Disruptor receives the updated state, outputting a new anxiety level. The Environment updates the global tension variable.
 7. **Disruptor Check (Information)**: Every *N* turns, Information Agents read the transcript, generate synthesized reports, and the Environment appends them to the public transcript.
-8. **Turn Advance**: The `current_speaker` variable switches to the next Actor in the sequence (e.g., Agent B). The loop repeats.
+8. **Turn Advance**: The `current_speaker` variable switches to the next Actor in the sequence (e.g., Agent B).
+9. **Context Maintenance**: The Environment prunes/summarizes the current context to maintain optimal token counts. The loop repeats.
 
 ### Execution Loop Sequence Diagram
 
@@ -116,5 +117,7 @@ The complete framework lifecycle flows through four distinct phases:
 2. **Evaluation Phase** → The Judge scores each episode. Results are logged to SQLite and Vector Memory.
 3. **Mutation Phase** → The Mutator analyzes the worst-performing episodes, generates candidate strategies, and tests them in Shadow Trials. Successful mutations increment the Generation.
 4. **Creation Phase** (conditional) → If performance has plateaued for $K$ consecutive generations (see `self_creation_mechanics.md`), the Provisioner designs and provisions a new agent. The new agent is shadow-tested before integration.
+
+9. **Context Maintenance**: Every *N* turns, the Environment triggers the `SummarizationAgent` to prune the transcript and state object (see `context_management_and_summarization.md`). This prevents reasoning degradation due to context window pressure.
 
 Phases 1–3 repeat indefinitely. Phase 4 triggers only when the Mutation Phase can no longer yield improvement.

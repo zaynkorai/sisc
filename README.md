@@ -17,6 +17,7 @@ This is a highly modular framework. Read the documentation in this order to unde
 *   [**Agent Design & State**](./docs/agent_design_and_state.md) — The `EnvironmentState` payload and JSON output schemas.
 *   [**Self-Creation Mechanics**](./docs/self_creation_mechanics.md) — How systemic deadlocks trigger the dynamic architecting of new agents (The Provisioner).
 *   [**The Self-Improvement Loop**](./docs/self_improvement_loop.md) — The Actor-Critic pipeline, shadow trials, and monotonic non-decreasing math.
+*   [**Context Management**](./docs/context_management_and_summarization.md) — Mitigating context window pressure via tiered summarization and state pruning.
 
 ### 2. Phase 2: System Implementation ⚙️
 *How to build the infrastructure.*
@@ -34,6 +35,7 @@ This is a highly modular framework. Read the documentation in this order to unde
 *Seeing it in action and exploring specialized asynchronous agents.*
 *   [**Applicability Matrix**](./docs/applicability_matrix.md) — 11 perfect-fit domains, 8 adaptable domains, and 3 anti-patterns for this framework.
 *   [**US-Iran Simulation**](./docs/us_iran_simulation.md) — The geopolitical benchmark case study mapping abstract agents to real-world entities.
+*   [**Code Review Adaptation**](./docs/code_review_implementation.md) — Mapping the negotiation framework to Automated Code Reviews (ACR).
 *   [**Explorer Agent**](./docs/explorer_agent.md) — The outward-looking "Possibility Researcher" that synthesis convergence hypotheses.
 *   [**Capitalizer Agent**](./docs/capitalizer_agent.md) — The Interjector that eavesdrops on internal monologues to calculate hidden overlaps.
 
