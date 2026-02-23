@@ -193,7 +193,7 @@ describe("Ingredient", () => {
         const result = Ingredient.parse({
             ingredient_id: "ing_001",
             category: "model",
-            name: "GPT-4",
+            name: "GPT-5-nano",
             maturity: "production",
             accessibility: "public_api",
             tags: ["llm", "reasoning"],

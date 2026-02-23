@@ -42,6 +42,10 @@ export interface OrchestratorOptions {
     onCreationApproval?: (spec: object) => Promise<boolean>;
     /** Callback for logging/monitoring each generation. */
     onGenerationComplete?: (generation: number, results: EpochResult[]) => void;
+    /** Callback for real-time turn completion logging. */
+    onTurnComplete?: (speakerId: string, publicDialogue: string) => void;
+    /** Callback for new agent creation logging. */
+    onAgentCreated?: (agentId: string, archetype: string) => void;
 }
 
 /**
@@ -65,6 +69,8 @@ export async function runFullSimulation(options: OrchestratorOptions): Promise<v
         maxGenerations = 100,
         onCreationApproval,
         onGenerationComplete,
+        onTurnComplete,
+        onAgentCreated,
     } = options;
 
     // Track the mutable agent references and creation attempts
@@ -86,6 +92,18 @@ export async function runFullSimulation(options: OrchestratorOptions): Promise<v
                 if (capitalizer) env.setCapitalizer(capitalizer);
                 if (tensionDisruptor) env.setTensionAgent(tensionDisruptor);
                 if (infoDisruptor) env.setInfoDisruptor(infoDisruptor);
+
+                // Wire real-time logging callbacks
+                if (onTurnComplete) {
+                    env.on("turn:complete", ({ speakerId, proposal }) => {
+                        onTurnComplete(speakerId, proposal.public_dialogue);
+                    });
+                }
+                if (onAgentCreated) {
+                    env.on("agent:created", ({ spec }) => {
+                        onAgentCreated(spec.agent_id, spec.archetype);
+                    });
+                }
 
                 const [finalState, transcript] = await env.runEpisode(activeAgents);
                 const evaluation = await judge.evaluate(
