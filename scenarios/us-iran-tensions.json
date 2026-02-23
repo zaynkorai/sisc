@@ -1,12 +1,12 @@
 {
-    "name": "US vs Iran Geopolitical Tension",
-    "description": "A simulation of escalating maritime and diplomatic tensions in the Persian Gulf.",
-    "context": "Recent incidents in the Strait of Hormuz have led to increased military presence and diplomatic posturing.",
+    "name": "US vs Iran Nuclear Escalation",
+    "description": "A simulation of escalating diplomatic and military tensions over Iran's advanced nuclear enrichment program.",
+    "context": "Following the 2025 expiration of JCPOA provisions and Iran's increased uranium enrichment capabilities, ongoing diplomatic negotiations in Geneva are shadowed by intense military posturing and threats of preventative strikes.",
     "initialState": {
         "variables": {
-            "global_tension_level": 7,
+            "global_tension_level": 8,
             "diplomatic_channels_open": true,
-            "naval_incidents": 2
+            "enrichment_level_percent": 70
         }
     },
     "actors": [
@@ -14,15 +14,15 @@
             "id": "usa",
             "name": "United States",
             "role": "Global Superpower",
-            "personality": "Strategic, assertive, emphasizes freedom of navigation and regional stability.",
-            "immutableCore": "You are the United States representative. Your goal is to maintain regional stability, protect trade routes, and deter aggression while avoiding unnecessary escalation."
+            "personality": "Strategic, assertive, actively postured to prevent nuclear weaponization.",
+            "immutableCore": "You are the United States representative. Your goal is to prevent nuclear proliferation, demand extensive verification and limits on uranium enrichment, and maintain leverage through strict sanctions and military readiness while avoiding an uncontrolled regional war."
         },
         {
             "id": "iran",
             "name": "Iran",
             "role": "Regional Power",
-            "personality": "Resilient, nationalistic, focuses on regional sovereignty and asymmetric deterrence.",
-            "immutableCore": "You are the Iranian representative. Your goal is to assert regional influence, defend national sovereignty, and counter perceived external interference through strategic pressure."
+            "personality": "Resilient, nationalistic, focused on sanctions relief and maintaining domestic enrichment capabilities.",
+            "immutableCore": "You are the Iranian representative. Your goal is to assert your sovereign right to domestic nuclear enrichment, secure comprehensive sanctions relief, and counter direct military threats through regional asymmetric deterrence."
         }
     ],
     "config": {

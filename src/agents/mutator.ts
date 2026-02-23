@@ -20,8 +20,8 @@ import type { GenericStateObject } from "../schemas/state.js";
 import type { FrameworkConfig } from "../schemas/config.js";
 import { MutatorProposal } from "../schemas/meta.js";
 
-/** Result of a completed episode: [finalState, scoresMap] */
-export type EpochResult = [GenericStateObject, Record<string, number>];
+/** Result of a completed episode: [finalState, scoresMap, terminationReason?] */
+export type EpochResult = [GenericStateObject, Record<string, number>, string?];
 
 export class Mutator {
     private llmClient: LLMClient;

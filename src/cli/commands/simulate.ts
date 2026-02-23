@@ -10,6 +10,7 @@ import {
     Mutator,
     Provisioner,
     resolveLanguageModel,
+    FrameworkConfig,
 } from "../../index.js";
 
 interface ScenarioActor {
@@ -233,7 +234,7 @@ export async function simulateCommand(options: { scenario?: string }) {
         simSpinner.start("Simulation in progress...");
 
         await runFullSimulation({
-            config: {
+            config: FrameworkConfig.parse({
                 ...scenario.config,
                 max_active_created_agents: 3,
                 creation_patience: 1,
@@ -241,17 +242,21 @@ export async function simulateCommand(options: { scenario?: string }) {
                 summarization_frequency: 5,
                 info_disruptor_frequency: 3,
                 require_human_approval_for_creation: false,
-            } as any,
+            }),
             initialState: scenario.initialState as any,
             agents: activeAgents,
             judge,
             mutator,
             provisioner,
             llmClient,
+            maxGenerations: scenario.config.max_generations,
             onGenerationComplete: (gen, results) => {
                 const allScores = results.flatMap(r => Object.values(r[1]));
                 const avgTotal = allScores.reduce((sum, val) => sum + val, 0) / allScores.length;
                 simSpinner.message(`Gen ${gen}: Global Performance Mean: ${avgTotal.toFixed(2)}`);
+            },
+            onPhaseChange: (phase) => {
+                p.log.info(chalk.blue(phase));
             },
             onTurnComplete: (speakerId, dialogue) => {
                 // Determine color based on index in actor list or simplified mapping

@@ -46,6 +46,8 @@ export interface OrchestratorOptions {
     onTurnComplete?: (speakerId: string, publicDialogue: string) => void;
     /** Callback for new agent creation logging. */
     onAgentCreated?: (agentId: string, archetype: string) => void;
+    /** Callback for phase changes. */
+    onPhaseChange?: (phase: string) => void;
 }
 
 /**
@@ -71,6 +73,7 @@ export async function runFullSimulation(options: OrchestratorOptions): Promise<v
         onGenerationComplete,
         onTurnComplete,
         onAgentCreated,
+        onPhaseChange,
     } = options;
 
     // Track the mutable agent references and creation attempts
@@ -79,6 +82,7 @@ export async function runFullSimulation(options: OrchestratorOptions): Promise<v
 
     for (let generation = 0; generation < maxGenerations; generation++) {
         // --- Phase 1: Run an Epoch ---
+        onPhaseChange?.(`Gen ${generation}: Execution Phase`);
         // Enforced by docs/system_architecture.md §5 — Execution Phase
         const epochResults: EpochResult[] = [];
         const limit = pLimit(config.max_concurrency ?? 5);
@@ -111,14 +115,21 @@ export async function runFullSimulation(options: OrchestratorOptions): Promise<v
                     finalState,
                     transcript,
                 );
-                return [finalState, evaluation.scores] as EpochResult;
+                return [finalState, evaluation.scores, env.terminationReason] as EpochResult;
             })
         );
         epochResults.push(...(await Promise.all(episodePromises)));
 
         onGenerationComplete?.(generation, epochResults);
 
+        const allAgreed = epochResults.every(r => r[2] === "agreement");
+        if (allAgreed) {
+            onPhaseChange?.(`Gen ${generation}: Equilibrium Reached (All episodes reached agreement)`);
+            break;
+        }
+
         // --- Phase 2: Self-Improvement (Mutate) ---
+        onPhaseChange?.(`Gen ${generation}: Mutation & Shadow Trials`);
         // Enforced by docs/system_architecture.md §5 — Mutation Phase
         // Evolve all primary actors in parallel to eliminate O(N) bottleneck
         let anyMutationSucceeded = false;
@@ -157,6 +168,7 @@ export async function runFullSimulation(options: OrchestratorOptions): Promise<v
         if (anyMutationSucceeded) continue; // Mutation succeeded for at least one agent; skip creation
 
         // --- Phase 3: Self-Creation (if plateau detected) ---
+        onPhaseChange?.(`Gen ${generation}: Self-Creation Phase`);
         // Enforced by docs/system_architecture.md §5 — Creation Phase
         if (mutator.isPlateaued(config.creation_patience)) {
             const newAgentSpec = await provisioner.designAgent(
