@@ -45,6 +45,7 @@ This is a highly modular framework. Read the documentation in this order to unde
 
 ### 2. Phase 2: System Implementation
 *How to build the infrastructure.*
+*   [**Configuration Reference**](./docs/configuration_reference.md) — List of all config fields, defaults, and CLI override precedence.
 *   [**Data & Memory Schemas**](./docs/data_and_memory_schemas.md) — SQLite logic, schema versioning, indexing, and RomaDB/FAISS vector retrieval.
 *   [**Core System Prompts**](./docs/core_system_prompts.md) — The Tripartite Architecture (Immutable/Mutable/Dynamic) and full prompts for all Meta-Agents.
 *   [**API & Interfaces**](./docs/api_and_interfaces.md) — The developer contracts and 3-level error-handling fallbacks.

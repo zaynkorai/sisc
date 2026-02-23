@@ -6,6 +6,8 @@ To ensure this framework is simple, and usable for developers beyond the US-Iran
 
 Developers interact with the following classes to run the framework. All communication between classes uses strictly-typed Zod schemas for runtime validation with full TypeScript type inference.
 
+> Configuration source of truth: see [`configuration_reference.md`](./configuration_reference.md) for the complete `FrameworkConfig` field list, defaults, and CLI override precedence.
+
 ### A. The `GenericStateObject` (Zod Schema)
 The environment revolves around this shared state. Developers extend this base schema to fit their specific use case.
 
